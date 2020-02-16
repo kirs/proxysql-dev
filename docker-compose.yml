@@ -1,0 +1,157 @@
+version: "3"
+services:
+  proxysql-1:
+    # build:
+    #   context: ..
+    #   dockerfile: .devcontainer/Dockerfile
+    image: "proxysql-kirs:latest"
+    command:
+      /proxysql/src/proxysql -f --initial -c /proxysql_config/proxysql.cfg
+    volumes:
+      # - ..:/workspace:cached
+      - ./config:/proxysql_config
+    ports:
+      - "36032:6032" # admin sqlite interface
+      - "33306:3306" # proxy to mysql-m1
+
+  mysql-m1-binlogreader:
+    image: "renecannao/proxysql_mysqlbinlog:ubuntu18"
+    command:
+      /proxysql_binlog_reader -h mysql-m1 -u root -l 3310 -f
+    ports:
+      - "22111:3310"
+
+  mysql-m1:
+    image: "percona:5.7-jessie"
+    volumes:
+      - /var/lib/mysql
+    command: --server-id=1
+      --log-bin=mysql-bin
+      --binlog-format=ROW
+      --sync-binlog=1
+      --log-slave-updates=ON
+      --gtid-mode=ON
+      --enforce-gtid-consistency=ON
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --report-host=127.0.0.1
+      --report-port=22101
+    environment:
+      MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+      MYSQL_ROOT_HOST: '%'
+    ports:
+      - "22101:3306"
+
+  mysql-s1:
+    image: "percona:5.7-jessie"
+    volumes:
+      - /var/lib/mysql
+    command: --server-id=2
+      --log-bin=mysql-bin
+      --binlog-format=ROW
+      --sync-binlog=1
+      --log-slave-updates=ON
+      --gtid-mode=ON
+      --enforce-gtid-consistency=ON
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --report-host=127.0.0.1
+      --report-port=22201
+    environment:
+      MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+      MYSQL_ROOT_HOST: '%'
+    ports:
+      - "22201:3306"
+
+  mysql-s1-binlogreader:
+    # host.docker.internal
+    image: "renecannao/proxysql_mysqlbinlog:ubuntu18"
+    command:
+      /proxysql_binlog_reader -h mysql-s1 -u root -l 3310 -f
+    ports:
+      - "22211:3310"
+
+  mysql-s2:
+    image: "percona:5.7-jessie"
+    volumes:
+      - /var/lib/mysql
+    command: --server-id=3
+      --log-bin=mysql-bin
+      --binlog-format=ROW
+      --sync-binlog=1
+      --log-slave-updates=ON
+      --gtid-mode=ON
+      --enforce-gtid-consistency=ON
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --report-host=127.0.0.1
+      --report-port=22202
+    environment:
+      MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+      MYSQL_ROOT_HOST: '%'
+    ports:
+      - "22202:3306"
+
+  mysql-s2-binlogreader:
+    image: "renecannao/proxysql_mysqlbinlog:ubuntu18"
+    command:
+      /proxysql_binlog_reader -h mysql-s2 -u root -l 3310 -f
+    ports:
+      - "22212:3310"
+
+  mysql-s3:
+    image: "percona:5.7-jessie"
+    volumes:
+      - /var/lib/mysql
+    command: --server-id=4
+      --log-bin=mysql-bin
+      --binlog-format=ROW
+      --sync-binlog=1
+      --log-slave-updates=ON
+      --gtid-mode=ON
+      --enforce-gtid-consistency=ON
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --report-host=127.0.0.1
+      --report-port=22203
+    environment:
+      MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+      MYSQL_ROOT_HOST: '%'
+    ports:
+      - "22203:3306"
+
+  mysql-s3-binlogreader:
+    image: "renecannao/proxysql_mysqlbinlog:ubuntu18"
+    command:
+      /proxysql_binlog_reader -h mysql-s3 -u root -l 3310 -f
+    ports:
+      - "22213:3310"
+
+  mysql-s4:
+    image: "percona:5.7-jessie"
+    volumes:
+      - /var/lib/mysql
+    command: --server-id=5
+      --log-bin=mysql-bin
+      --binlog-format=ROW
+      --sync-binlog=1
+      --log-slave-updates=ON
+      --gtid-mode=ON
+      --enforce-gtid-consistency=ON
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --report-host=127.0.0.1
+      --report-port=22204
+      --bind-address=0.0.0.0
+    environment:
+      MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+      MYSQL_ROOT_HOST: '%'
+    ports:
+      - "22204:3306"
+
+  mysql-s4-binlogreader:
+    image: "renecannao/proxysql_mysqlbinlog:ubuntu18"
+    command:
+      /proxysql_binlog_reader -h mysql-s4 -u root -l 3310 -f
+    ports:
+      - "22214:3310"

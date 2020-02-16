@@ -1,0 +1,157 @@
+#!/usr/bin/env ruby
+
+# This script sets up a fairly elaborate test mysql replication cluster with the topology shown below
+#
+# +-------+      +-----------+
+# | 22203 +------> 22204(RO) |
+# +---+-^-+      +-----------+
+#     | |
+# +---v-+-+      +-------+      +-------+
+# | 22101 +------> 22201 +------> 22202 |
+# +-------+      +-------+      +-------+
+#
+# You can provide the no-comaster argument to exclude co-master and get this chain:
+# +-------+      +-----------+
+# | 22203 +------> 22204(RO) |
+# +-----^-+      +-----------+
+#       |
+# +-----+-+      +-------+      +-------+
+# | 22101 +------> 22201 +------> 22202 |
+# +-------+      +-------+      +-------+
+#
+
+class Mysql
+  REPL_USER = "repl_user"
+  CONTAINER_PORT = 3306
+
+  def initialize(docker_name, localhost_port, master: false, children: [])
+    @docker_name = docker_name
+    @host = ENV['CI'] ? @docker_name : '127.0.0.1'
+    @port = ENV['CI'] ? 3306 : localhost_port
+    @is_master = master
+    @children = children
+  end
+
+  def docker_name
+    @docker_name
+  end
+
+  def setup_repl_chain
+    stop_slaving
+    start_slaving
+  end
+
+  def master?
+    @is_master
+  end
+
+  def add_slave(mysql)
+    @children << mysql
+  end
+
+  def set_to_readonly
+    exec_cmd("SET GLOBAL read_only=1")
+  end
+
+  def create_meta_db
+    exec_cmd("CREATE DATABASE IF NOT EXISTS meta")
+  end
+
+  # the pt-heartbeat container waits for this db to be created before starting
+  # see ./docker/pt_heartbeat/entry.sh
+  def create_pt_heartbeat_hint
+    exec_cmd("CREATE DATABASE IF NOT EXISTS start_pt_heartbeat")
+  end
+
+  def await_mysql
+    puts "waiting for mysql to start (#{@port})"
+    loop do
+      break if `mysqladmin -h #{@host} -P #{@port} -u root ping 2>/dev/null`.include?("alive")
+      print(".")
+      sleep 1
+    end
+    print("\nDONE!\n")
+  end
+
+  def create_repl_user
+    return if repl_user_exist?
+
+    puts "Creating replication user in #{@docker_name}"
+
+    puts exec_cmd("CREATE USER #{REPL_USER} IDENTIFIED BY \"#{REPL_USER}\"", verbose: true)
+    puts exec_cmd("GRANT REPLICATION SLAVE ON *.* TO #{REPL_USER}", verbose: true)
+    puts exec_cmd("RESET MASTER", verbose: true)
+    puts exec_cmd("GRANT SELECT ON performance_schema.global_variables TO #{REPL_USER}", verbose: true)
+    puts exec_cmd("GRANT SELECT ON performance_schema.session_variables TO #{REPL_USER}", verbose: true)
+
+    puts "Replication user created successfully"
+  end
+
+  def visit_slaves(recursive: true, visited: nil, &blk)
+    visited ||= Hash.new(false)
+    visited[self] = true
+
+    @children.each do |child|
+      blk.call(self, child)
+      child.visit_slaves(visited: visited, &blk) if recursive && !visited[child]
+    end
+  end
+
+  def stop_slaving
+    visit_slaves do |_, child|
+      child.exec_cmd("STOP SLAVE")
+    end
+  end
+
+  def start_slaving(recursive: true, visited: nil)
+    visit_slaves do |s, child|
+      child.exec_cmd("CHANGE master TO master_host=\"#{s.docker_name}\", master_port=#{CONTAINER_PORT}, master_user=\"#{REPL_USER}\", master_password=\"#{REPL_USER}\"")
+      child.exec_cmd("RESET SLAVE")
+      child.exec_cmd("START SLAVE")
+      raise RuntimeError, "Slave did not start replicating" unless child.exec_cmd("SHOW SLAVE STATUS\\G") != ""
+    end
+  end
+
+  def repl_user_exist?
+    exec_cmd("SELECT user FROM mysql.user WHERE user=\"repl_user\"", options: ["-BN"]) != ""
+  end
+
+  def exec_cmd(cmd, verbose: false, options: [])
+    base = "mysql -u root -h #{@host} -P #{@port}#{verbose ? " -v" : ""}"
+    options.each do |opt|
+      base += " #{opt}"
+    end
+
+    cmd = "#{base} -e '#{cmd}'"
+
+    puts "+ #{cmd}"
+    `#{cmd}`
+  end
+end
+
+def main
+  slaves = []
+  (1..4).each do |i|
+    slaves << Mysql.new("mysql-s#{i}", 22200+i)
+  end
+
+  slaves[0].add_slave(slaves[1])
+  slaves[2].add_slave(slaves[3])
+
+  master = Mysql.new("mysql-m1", 22101, master: true, children: [slaves[0], slaves[2]])
+
+  # slaves[2].add_slave(master) unless ARGV[0] == "no-comaster"
+
+  (slaves + [master]).each do |db|
+    db.await_mysql
+    db.create_repl_user
+  end
+
+  master.setup_repl_chain
+  master.create_meta_db
+  master.create_pt_heartbeat_hint
+
+  slaves[3].set_to_readonly
+end
+
+main
