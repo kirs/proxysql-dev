@@ -8,7 +8,6 @@ services:
     command:
       /proxysql/src/proxysql -f --initial -c /proxysql_config/proxysql.cfg
     volumes:
-      # - ..:/workspace:cached
       - ./config:/proxysql_config
     ports:
       - "36032:6032" # admin sqlite interface
@@ -23,8 +22,8 @@ services:
 
   mysql-m1:
     image: "percona:5.7-jessie"
-    volumes:
-      - /var/lib/mysql
+    # volumes:
+    #   - /var/lib/mysql
     command: --server-id=1
       --log-bin=mysql-bin
       --binlog-format=ROW
@@ -44,8 +43,8 @@ services:
 
   mysql-s1:
     image: "percona:5.7-jessie"
-    volumes:
-      - /var/lib/mysql
+    # volumes:
+    #   - /var/lib/mysql
     command: --server-id=2
       --log-bin=mysql-bin
       --binlog-format=ROW
@@ -73,8 +72,8 @@ services:
 
   mysql-s2:
     image: "percona:5.7-jessie"
-    volumes:
-      - /var/lib/mysql
+    # volumes:
+    #   - /var/lib/mysql
     command: --server-id=3
       --log-bin=mysql-bin
       --binlog-format=ROW
@@ -101,8 +100,8 @@ services:
 
   mysql-s3:
     image: "percona:5.7-jessie"
-    volumes:
-      - /var/lib/mysql
+    # volumes:
+    #   - /var/lib/mysql
     command: --server-id=4
       --log-bin=mysql-bin
       --binlog-format=ROW
@@ -129,8 +128,8 @@ services:
 
   mysql-s4:
     image: "percona:5.7-jessie"
-    volumes:
-      - /var/lib/mysql
+    # volumes:
+    #   - /var/lib/mysql
     command: --server-id=5
       --log-bin=mysql-bin
       --binlog-format=ROW

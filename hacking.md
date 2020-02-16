@@ -16,11 +16,6 @@ Start proxysql container:
 
   docker-compose up --force-recreate --abort-on-container-exit proxysql-1
 
-Jump into ProxySQL container, with VS code or with docker exec.
-Build proxysql:
+Play with a script that sets up a sample flow using reader-writer split:
 
-          make (or make debug)
-
-Launch proxysql:
-
-          src/proxysql -f --initial -c gtid-playground/proxysql.cfg
+  ruby hack.rb
