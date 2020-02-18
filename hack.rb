@@ -23,8 +23,18 @@ class Hack
 
     puts gtid
 
-    reader_conn = Mysql2::Client.new(reader)
-    reader_conn.query("/* min_gtid=#{gtid} */ SELECT * FROM test")
+    t = Thread.new {
+      reader_conn = Mysql2::Client.new(reader)
+      q = "/* min_gtid=#{gtid} */ SELECT * FROM test"
+      puts q
+      reader_conn.query(q)
+    }
+    # t2 = Thread.new {
+    #   sleep 1
+    #   on_every_slave('START SLAVE') if break_replication
+    # }
+    t.join
+    # t2.join
   ensure
     on_every_slave('START SLAVE') if break_replication
   end
@@ -48,4 +58,8 @@ end
 
 # Hack.new.call(Hack::MYSQL_WRITER, Hack::MYSQL_READER)
 # Hack.new.call(Hack::PROXY_WRITER, Hack::PROXY_READER, break_replication: true)
-Hack.new.call(Hack::PROXY_WRITER, Hack::PROXY_READER, break_replication: false)
+# Hack.new.call(Hack::PROXY_WRITER, Hack::PROXY_READER, break_replication: false)
+
+# gtid= "3e37d1c0-50fd-11ea-a8c7-0242ac170003:1"
+reader_conn = Mysql2::Client.new(Hack::PROXY_READER)
+reader_conn.query("/* hostgroup=3,timeout=10 */ SELECT * FROM test")

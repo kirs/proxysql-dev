@@ -1,10 +1,12 @@
 # Steps
 
+binlogreader crashes if MySQL is not running, which means it's order-dependent. We should first start mysqld, then binlogreaders, then proxysql. Then we can hack.
+
 Start DBs:
 
   docker-compose up --force-recreate --abort-on-container-exit mysql-m1 mysql-s1 mysql-s2 mysql-s3 mysql-s4
 
-Create topology:
+Setup topology:
 
   setup-repl
 
@@ -16,6 +18,11 @@ Start proxysql container:
 
   docker-compose up --force-recreate --abort-on-container-exit proxysql-1
 
-Play with a script that sets up a sample flow using reader-writer split:
+Jump into ProxySQL container, with VS code or with docker exec.
+Build proxysql:
 
-  ruby hack.rb
+          make (or make debug)
+
+Launch proxysql:
+
+          src/proxysql -f --initial -c gtid-playground/proxysql.cfg
